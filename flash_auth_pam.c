@@ -70,7 +70,7 @@ static void free_config(config_t *cfg) {
     SAFE_FREE(cfg->algorithm);
     SAFE_FREE(cfg->mount_point);
     SAFE_FREE(cfg->log_path);
-    memset(cfg, 0, sizeof(config_t));
+//    memset(cfg, 0, sizeof(config_t));
 }
 
 static int read_config(pam_handle_t *pamh, const char *filename, config_t *cfg) {
@@ -160,15 +160,18 @@ static int read_config(pam_handle_t *pamh, const char *filename, config_t *cfg) 
 
 
 static int verify_signature(pam_handle_t *pamh, const config_t *cfg) {
+    // Проверка на наличие конфигурации и публичного ключа
     if (!cfg || !cfg->public_key_path) {
         DEBUG_LOG("Invalid config in verify_signature");
         return 0;
     }
 
+    // Объявление переменных для challenge, подписи и публичного ключа
     unsigned char challenge[32];
     unsigned char signature[64];
     unsigned char public_key[32];
 
+    // Чтение challenge файла
     int fd = open(CHALLENGE_FILE, O_RDONLY);
     if (fd == -1 || read(fd, challenge, sizeof(challenge)) != sizeof(challenge)) {
         DEBUG_LOG("Failed to read challenge file: %s", strerror(errno));
@@ -177,6 +180,7 @@ static int verify_signature(pam_handle_t *pamh, const config_t *cfg) {
     }
     close(fd);
 
+    // Чтение файла подписи
     fd = open(SIGNATURE_FILE, O_RDONLY);
     if (fd == -1 || read(fd, signature, sizeof(signature)) != sizeof(signature)) {
         DEBUG_LOG("Failed to read signature file: %s", strerror(errno));
@@ -185,6 +189,7 @@ static int verify_signature(pam_handle_t *pamh, const config_t *cfg) {
     }
     close(fd);
 
+    // Чтение публичного ключа
     fd = open(cfg->public_key_path, O_RDONLY);
     if (fd == -1 || read(fd, public_key, sizeof(public_key)) != sizeof(public_key)) {
         DEBUG_LOG("Failed to read public key: %s", strerror(errno));
@@ -193,11 +198,13 @@ static int verify_signature(pam_handle_t *pamh, const config_t *cfg) {
     }
     close(fd);
 
+    // Инициализация библиотеки libsodium для криптографических операций
     if (sodium_init() < 0) {
         DEBUG_LOG("Libsodium initialization failed");
         return 0;
     }
 
+    // Проверка подписи
     return crypto_sign_verify_detached(signature, challenge, sizeof(challenge), public_key) == 0;
 }
 
@@ -220,10 +227,16 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     
     // Получение имени пользователя
     const char *username = NULL;
-    if ((retval = pam_get_user(pamh, &username, NULL)) != PAM_SUCCESS || !username) {
+    if ((retval = pam_get_user(pamh, &username, NULL)) != PAM_SUCCESS) {
         DEBUG_LOG("Cannot get username");
         goto cleanup;
     }
+    
+    if (!username) {
+        DEBUG_LOG("pam_get_user returned success but username is NULL");
+         goto cleanup;
+    }
+    
     DEBUG_LOG("Got username: %s", username);
 
     // Сравнение с допустимым пользователем из конфигурации	
