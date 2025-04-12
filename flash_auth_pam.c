@@ -264,11 +264,14 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 
     umask(077);
     unsigned char challenge[32];
+    DEBUG_LOG("Creating challenge file at %s", CHALLENGE_FILE);
     int fd = open(CHALLENGE_FILE, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd == -1) {
         DEBUG_LOG("Cannot create challenge file: %s", strerror(errno));
-        goto cleanup;
+        goto cleanup;  // Завершаем, если не удалось создать файл
     }
+
+    DEBUG_LOG("Challenge file created successfully at %s", CHALLENGE_FILE);
 
     if (getrandom(challenge, sizeof(challenge), GRND_NONBLOCK) != sizeof(challenge)) {
         DEBUG_LOG("Challenge generation failed");
@@ -277,7 +280,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     }
 
     if (write(fd, challenge, sizeof(challenge)) != sizeof(challenge)) {
-        DEBUG_LOG("Challenge write failed");
+        DEBUG_LOG("Failed to write challenge to file %s: %s", CHALLENGE_FILE, strerror(errno));
         close(fd);
         goto cleanup;
     }
