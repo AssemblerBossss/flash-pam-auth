@@ -238,10 +238,10 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     }
 
     // Проверка путей к ключу и скрипту
-    if (!username || !cfg.username || strcmp(username, cfg.username) != 0) {
-        DEBUG_LOG("Username mismatch");
-        goto cleanup;
-    }
+//    if (!username || !cfg.username || strcmp(username, cfg.username) != 0) {
+//        DEBUG_LOG("Username mismatch");
+//        goto cleanup;
+//    }
     
     if (!cfg.sign_script_path || !cfg.private_key_path) {
         DEBUG_LOG("Script path or private key path is NULL");
@@ -308,6 +308,11 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         // Родительский процесс: ждём завершения
         int status;
         waitpid(pid, &status, 0);
+        
+        if (waitpid(pid, &status, 0) == -1) {
+            DEBUG_LOG("waitpid failed: %s", strerror(errno));
+            goto cleanup;
+        }
 
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
             // Успех (скрипт вернул 0)
@@ -333,8 +338,9 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     }
 
 cleanup:
-    unlink(CHALLENGE_FILE);
-    unlink(SIGNATURE_FILE);
+    if (access(CHALLENGE_FILE, F_OK) == 0) unlink(CHALLENGE_FILE);
+    if (access(SIGNATURE_FILE, F_OK) == 0) unlink(SIGNATURE_FILE);
+
     free_config(&cfg);
     return retval;
 }
